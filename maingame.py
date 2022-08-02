@@ -22,7 +22,7 @@ height = infoObject.current_h
 #setting up list for splitting images
 splitimgs = []
 #resolution, higher is faster, 1 is detailed but slow
-resolution = 1
+resolution = 5
 imgw = 100
 imgh = 100
 #how many pieces to split the image into
