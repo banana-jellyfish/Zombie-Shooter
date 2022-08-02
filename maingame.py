@@ -22,7 +22,7 @@ height = infoObject.current_h
 #setting up list for splitting images
 splitimgs = []
 #resolution, higher is faster, 1 is detailed but slow
-resolution = 5
+resolution = 1
 imgw = 100
 imgh = 100
 #how many pieces to split the image into
@@ -143,7 +143,7 @@ class Monster:
         fullhyp = math.sqrt(o**2+a**2)
         if len(self.path) < 1:
             self.pathfindcooldown = 0
-        if fullhyp >= 15 and self.start != self.end:
+        if fullhyp >= 15 and self.start < self.end-1:
             self.findingpath = False
         if ((self.start != self.end) or self.findingpath) and self.pathfindcooldown<1:
                 self.path = pathfinding.astar(worldMap,(int(self.x)+0.5,int(self.y)+0.5),(int(playerx)+0.5,int(playery)+0.5))
@@ -161,6 +161,7 @@ class Monster:
             a = desty - self.y
         if a == 0:
             a = 0.000000000000000000000000001
+
         angle = math.atan(o/a)
         hyp = self.speed
         newo = math.sin(angle)*hyp
@@ -188,7 +189,7 @@ class Monster:
                         del self.path[0]
         self.pathfindcooldown -= 1
  
-
+            
     #checks if they can attack
     def check_attack(self,playerx,playery, health):
         o = -playerx+self.x
@@ -224,7 +225,7 @@ for x in range(len(worldMap)):
             posX = x+0.5
             posY = y+0.5 
 #player radius
-playerrad = 1.5
+playerrad = 1
 #title screen
 def title(posX,posY,worldMap):
     while True:
@@ -237,10 +238,22 @@ def title(posX,posY,worldMap):
                 if event.key == K_SPACE:
                     main(posX,posY,worldMap,resolution)
                 if event.key == K_m:
-                    mapeditor(posX,posY,mapwidth)
+                    mapeditor(mapwidth)
         pygame.display.update()
         #function for viewing/editing map and file
-def mapeditor(posX,posY,mapwidth):
+def mapeditor(mapwidth):
+ foundpos = False
+ for x in range(mapwidth):
+    for y in range(mapheight):
+        if worldMap[x][y] == 7:
+            posX = x+0.5
+            posY = y+0.5
+            foundpos = True
+            break
+ if not foundpos:
+    posX = 0.5
+    posY = 0.5
+    worldMap[0][0] = 7
  mousedown = False
  curr_colour = 1
  size = 1
@@ -266,7 +279,10 @@ def mapeditor(posX,posY,mapwidth):
                 screen.blit(mapwallimgs[worldMap[x][y]-1],(x*mapw,y*maph))
     mx,my = pygame.mouse.get_pos()
     if curr_colour > 0:
-        screen.blit(pygame.transform.scale(mapwallimgs[curr_colour-1],(mapw*size,maph*size)),(mx,my))
+        for x in range(0,size*int(mapw+1),int(mapw+1)):
+                    for y in range(0,size*int(maph+1),int(maph+1)):
+                            screen.blit(mapwallimgs[curr_colour-1],(mx+x,my+y))
+        
     else:
         pygame.draw.rect(screen,(0,0,0),(mx,my,mapw*size,maph*size))
     for event in pygame.event.get():
@@ -329,6 +345,7 @@ def mapeditor(posX,posY,mapwidth):
 #main program
 def main(posX,posY,worldMap,resolution):
     #removing monsters and player from map, and adding monsters to sprite list
+    fixedworldmap = worldMap
     for x in range(len(worldMap)):
         for y in range(len(worldMap[x])):
             if worldMap[x][y] == 6:
@@ -347,7 +364,7 @@ def main(posX,posY,worldMap,resolution):
     shoot = False
     clock = pygame.time.Clock()
     #direction of player
-    dirX = -1.0
+    dirX = -1
     dirY = 0.0
     #camera plane
     planeX = 0.0
@@ -522,14 +539,16 @@ def main(posX,posY,worldMap,resolution):
                         s.set_alpha(128)                
                         s.fill((0,0,0))           
                         screen.blit(s, (startx,drawStart))
+                for i in range(resolution+amount):
+                #find out how far each wall is to comapare it to monsters
+                    walldists.append(perpWallDist)
                 amount = 0
                 startx = x
+                
             else:
                 amount += resolution
             oldtexnum = texnum
-            for i in range(resolution):
-                #find out how far each wall is to comapare it to monsters
-                walldists.append(perpWallDist)
+            
         checks = 1
         #put sprites in order by distance
         while checks > 0:
@@ -587,15 +606,16 @@ def main(posX,posY,worldMap,resolution):
             if spriteHeight > maxsize:
                 spriteHeight =maxsize
                 spriteWidth = maxsize
-            # darkness = int(sprites[i].dist**2/4)
-            # if darkness < 0:
-            #     darkness = 0
-            # if darkness > 5:
-            #     darkness = 5
+            darkness = int(sprites[i].dist**2/4)
+            if darkness < 0:
+                darkness = 0
+            if darkness > 5:
+                darkness = 5
             if sprites[i].health <= 0:
                 img = dedzedimg
             else:
-                img = sprites[i].zombieimage[0]
+                img = sprites[i].zombieimage[darkness]
+            
             sprites[i].drawn = False
             sprites[i].startx = drawStartX
             sprites[i].starty = drawStartY  
@@ -603,20 +623,41 @@ def main(posX,posY,worldMap,resolution):
             sprites[i].visible = True
             if transformy > 0 and drawStartX > -spriteWidth:
                         starting = False
-
-                        if spriteHeight < maxsize:
-                            img = pygame.transform.scale(img,(spriteWidth,spriteHeight))
-                            screen.blit(img,(drawStartX,drawStartY))
+                        cut = False
+                        sprites[i].start = 0
+                        sprites[i].end = 0
 
                         for x in range(drawStartX,drawEndX):
                                 if walldists[x] < sprites[i].dist:
-                                    pass
+                                    cut = True
                                 else:
                                      if starting:
                                          sprites[i].end = x
                                      else:
                                          sprites[i].start = x
                                          starting = True
+                        if darkness < 5:
+                            # pwidth = width/pieces
+                            # for i in range(pieces+1):
+                            #     newimg = pygame.transform.chop(image,(0,0,width-(pwidth*i),0))
+                            #     newimg = pygame.transform.chop(newimg,(pwidth,0,pwidth*i,0))
+                            if spriteHeight < maxsize:
+                                if cut:
+                                    img = pygame.transform.scale(img,(spriteWidth,spriteHeight))
+                                    # img = pygame.transform.chop(img,(0,0,spriteWidth-(sprites[i].start),0))
+                                    # img = pygame.transform.chop(img,(sprites[i].end-sprites[i].start,0,sprites[i].start,0))
+                                    # if sprites[i].start > drawStartX+spriteWidth:
+                                    #     screen.blit(img,(drawStartX,drawStartY),(sprites[i].start-drawStartX,0,sprites[i].end-sprites[i].start,spriteHeight))
+                                    # else:
+                                    #     screen.blit(img,(drawStartX,drawStartY),(0,0,sprites[i].end-sprites[i].start,spriteHeight))
+                                    if drawStartX < sprites[i].start:
+                                        screen.blit(img,(sprites[i].start-resolution,drawStartY),((sprites[i].start-drawStartX),0,sprites[i].end-sprites[i].start,spriteHeight))
+                                    else:
+                                        screen.blit(img,(drawStartX,drawStartY),(0,0,sprites[i].end-sprites[i].start,spriteHeight))
+
+                                else:
+                                    img = pygame.transform.scale(img,(spriteWidth,spriteHeight))
+                                    screen.blit(img,(drawStartX,drawStartY))
 
         #animation of blood
         if len(bloodsprites) > 0:
@@ -647,8 +688,9 @@ def main(posX,posY,worldMap,resolution):
             if drawStartY < 0:
                  drawStartY = 0
             img = bloodsprites[i].image
-            bloodsprites[i].dist = transformy         
-            if transformy > 0 and drawStartX > -spriteWidth:
+            bloodsprites[i].dist = transformy
+            darkness = int(bloodsprites[i].dist**2/4)         
+            if transformy > 0 and drawStartX > -spriteWidth and darkness < 5:
                         if spriteHeight > 500:
                             spriteHeight = 500
                             spriteWidth= 500
@@ -677,8 +719,8 @@ def main(posX,posY,worldMap,resolution):
                 for y in range(mapheight):
                     if worldMap[x][y] > 0:
                         screen.blit(mapwallimgs[worldMap[x][y]-1],(x*mapw,y*maph))
-                if x == int(posX) and y == int(posY):
-                    screen.blit(mapwallimgs[6],(x*mapw,y*maph))
+                    if x == int(posX) and y == int(posY):
+                        screen.blit(mapwallimgs[6],(x*mapw,y*maph))
         screen.blit(gunimg,(width/2-(gunwidth/2)-6,height/2-(gunwidth/3)))
         # screen.blit(crosshair,(width/2-(cw/2),height/2-(cw/2)))
         oldTime = time
@@ -710,6 +752,8 @@ def main(posX,posY,worldMap,resolution):
                 if event.key == K_a:
                     strafeleft = True
                     straferight = False
+                if event.key == K_r:
+                    title(0,0,fixedworldmap)
                 if event.key == K_ESCAPE:
                     pygame.quit()
                     sys.exit()
@@ -731,36 +775,22 @@ def main(posX,posY,worldMap,resolution):
                     shoot = False
         #for the player hitbox
         if dirX >=0:
-            playradx = 0.75
+            playradx = 0.5
         else:
-            playradx = -0.75
+            playradx = -0.5
         if dirY>=0:
-            playrady = 0.75
+            playrady = 0.5
         else:
-            playrady = -0.75
-        if up and not gameover:
+            playrady = -0.5
+        if up:
                #moving around     
                     if worldMap[int(posX+playradx+dirX*moveSpeed)][int(posY)] in[0,6]:
-                        newposx = posX+dirX*moveSpeed
-                        moving = True
-                        for i in range(numsprites):
-                            if sprites[i].health > 0:
-                                hyp = math.sqrt((newposx-sprites[i].x)**2+(posY-sprites[i].y)**2)
-                                if hyp <= playerrad:
-                                    moving = False
-                        if moving:
+                        
                             posX+=dirX*moveSpeed
                     if worldMap[int(posX) ][int(posY+playrady+dirY*moveSpeed)] in[0,6]:
-                        newposy = posY+dirY*moveSpeed
-                        moving = True
-                        for i in range(numsprites):
-                            if sprites[i].health > 0:
-                                hyp = math.sqrt((newposy-sprites[i].y)**2+(posX-sprites[i].x)**2)
-                                if hyp <= playerrad:
-                                    moving = False
-                        if moving:
+                       
                             posY+=dirY*moveSpeed
-        if down and not gameover:
+        if down:
                     
                     if worldMap[int(posX-playradx-dirX*moveSpeed) ][int(posY) ] in[0,6]:
                         posX-=dirX*moveSpeed
@@ -774,13 +804,13 @@ def main(posX,posY,worldMap,resolution):
             playrady = 0.75
         else:
             playrady = -0.75
-        if straferight and not gameover:
+        if straferight:
                     
                     if worldMap[int(posX+playradx+planeX*moveSpeed) ][int(posY) ] in[0,6]:
                         posX+=planeX*moveSpeed
                     if worldMap[int(posX) ][int(posY+playrady+planeY*moveSpeed) ] in[0,6]:
                         posY+=planeY*moveSpeed
-        if strafeleft and not gameover:
+        if strafeleft:
                     
                     if worldMap[int(posX-playradx-planeX*moveSpeed) ][int(posY) ] in[0,6]:
                         posX-=planeX*moveSpeed
