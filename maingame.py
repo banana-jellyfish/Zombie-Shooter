@@ -1,5 +1,7 @@
 #importing buncha stuff
 from cmath import tanh
+from datetime import MAXYEAR
+from tracemalloc import start
 import pygame, sys, math, pathfinding,random
 from pygame.locals import *
 #initialise python and fonts
@@ -104,8 +106,27 @@ class blood:
         if self.bloodtime > 1:
             del bloodsprites[i]
 # a lot of stuff in this class to tell monsters what to do
+# class ammo:
+#     def __init__(self,x,y):
+#         self.x = x
+#         self.y = y
+#         self.dist = 0
+#         self.startx = 0
+#         self.width = 0
+#         self.start = 0
+#         self.end = 0
+#         self.starty = 0
+#     def check_collide(self,playerx,playery,ammosprites,ammo_count,ammonum):
+#         o = self.x - playerx
+#         a = self.y - playery
+#         h = math.sqrt(o**2+a**2)
+#         if h <= 1:
+#             del ammosprites[ammonum]
+#             ammo_count+=6
+#         return ammosprites,ammo_count
+
 class Monster:
-    def __init__(self,posx,posy,damage,health, speed,zombieimage,bloods):
+    def __init__(self,posx,posy,damage,health, speed,zombieimage,bloods,type):
         #lotta variables
         self.num = 0
         self.x = posx
@@ -134,6 +155,15 @@ class Monster:
         self.startx = 0
         self.starty = 0
         self.scale = 0
+        self.type = type
+    def check_collide(self,playerx,playery,ammosprites,ammo_count,ammonum):
+        o = self.x - playerx
+        a = self.y - playery
+        h = math.sqrt(o**2+a**2)
+        if h <= 1:
+            del ammosprites[ammonum]
+            ammo_count+=6
+        return ammosprites,ammo_count
     def move(self,playerx,playery,playerrad,sprites,znum,res,frameTime):
         #decides where they go with pathfinding in separate file
         destx = playerx
@@ -143,7 +173,7 @@ class Monster:
         fullhyp = math.sqrt(o**2+a**2)
         if len(self.path) < 1:
             self.pathfindcooldown = 0
-        if fullhyp >= 15 and self.start < self.end-1:
+        if fullhyp >= 20 and self.start == self.end:
             self.findingpath = False
         if ((self.start != self.end) or self.findingpath) and self.pathfindcooldown<1:
                 self.path = pathfinding.astar(worldMap,(int(self.x)+0.5,int(self.y)+0.5),(int(playerx)+0.5,int(playery)+0.5))
@@ -189,7 +219,7 @@ class Monster:
                         del self.path[0]
         self.pathfindcooldown -= 1
  
-            
+
     #checks if they can attack
     def check_attack(self,playerx,playery, health):
         o = -playerx+self.x
@@ -228,8 +258,10 @@ for x in range(len(worldMap)):
 playerrad = 1
 #title screen
 def title(posX,posY,worldMap):
+    titleimg = pygame.image.load('title.png')
+    titleimg = pygame.transform.scale(titleimg,(width,height))
     while True:
-        screen.fill((255,0,100))
+        screen.blit(titleimg,(0,0))
         for event in pygame.event.get():
             if event.type == QUIT:
                 pygame.quit()
@@ -245,7 +277,8 @@ def mapeditor(mapwidth):
  foundpos = False
  for x in range(mapwidth):
     for y in range(mapheight):
-        if worldMap[x][y] == 7:
+
+        if worldMap[x][y] == 8:
             posX = x+0.5
             posY = y+0.5
             foundpos = True
@@ -253,38 +286,58 @@ def mapeditor(mapwidth):
  if not foundpos:
     posX = 0.5
     posY = 0.5
-    worldMap[0][0] = 7
+    worldMap[0][0] = 8
  mousedown = False
  curr_colour = 1
  size = 1
  mapw = width/mapwidth
- maph = height/mapwidth
+ maph = (0.9*height)/mapwidth
  mapzomimg = pygame.image.load('zombie1.png').convert_alpha()
  mapzomimg = pygame.transform.scale(mapzomimg,(mapw+1,maph+1))
  mapplayerimg = pygame.image.load('player.png').convert_alpha()
  mapplayerimg = pygame.transform.scale(mapplayerimg,(mapw+1,maph+1))
+ mapammoimg = pygame.transform.scale(pygame.image.load('ammo.png').convert_alpha(),(mapw+1,maph+1))
  mapwallimgs = []
  for i in range(5):
     wallimg = pygame.image.load('wallimg'+str(i)+'.png').convert_alpha()
     wallimg = pygame.transform.scale(wallimg,(mapw+1,maph+1))
     mapwallimgs.append(wallimg)
+ 
+ mapwallimgs.append(mapammoimg)
  mapwallimgs.append(mapzomimg)
  mapwallimgs.append(mapplayerimg)
+ myfont = pygame.font.SysFont('Arial', int(0.8*0.1*height))
+ pygame.mouse.set_visible(False)
  while True:   
     screen.fill((0,0,0))
     #displaying map
     for x in range(mapwidth):
         for y in range(mapheight):
             if worldMap[x][y] > 0:
-                screen.blit(mapwallimgs[worldMap[x][y]-1],(x*mapw,y*maph))
+                screen.blit(mapwallimgs[worldMap[x][y]-1],(x*mapw,y*maph+(0.1*height)))
     mx,my = pygame.mouse.get_pos()
-    if curr_colour > 0:
+    if curr_colour > 0 and curr_colour < 8:
         for x in range(0,size*int(mapw+1),int(mapw+1)):
                     for y in range(0,size*int(maph+1),int(maph+1)):
-                            screen.blit(mapwallimgs[curr_colour-1],(mx+x,my+y))
-        
+                            screen.blit(mapwallimgs[curr_colour-1],(mx+x,my+y+int(0.1*height)))
+    elif curr_colour == 8:
+        screen.blit(mapwallimgs[curr_colour-1],(mx,my+int(0.1*height)))
     else:
-        pygame.draw.rect(screen,(0,0,0),(mx,my,mapw*size,maph*size))
+        pygame.draw.rect(screen,(0,0,0),(mx,my+(0.1*height),mapw*size,maph*size))
+    for i in range(8):
+        
+        textsurface = myfont.render((str(i+1)+':'), False, (255,255,255))
+        screen.blit(textsurface,(int(i*(width/8)),int(0.1*0.1*height)))
+        if i+1 == 6:
+            placeimg = pygame.transform.scale(pygame.image.load('ammo.png').convert_alpha(),(int(0.8*0.1*height),int(0.8*0.1*height)))
+        elif i+1 == 7:
+            placeimg = pygame.transform.scale(pygame.image.load('zombie1.png').convert_alpha(),(int(0.8*0.1*height),int(0.8*0.1*height)))
+        elif i+1 == 8:
+            placeimg = pygame.transform.scale(pygame.image.load('player.png').convert_alpha(),(int(0.8*0.1*height),int(0.8*0.1*height)))
+        else:
+            placeimg = pygame.transform.scale(pygame.image.load('wallimg'+str(i)+'.png').convert_alpha(),(int(0.8*0.1*height),int(0.8*0.1*height)))
+        screen.blit(mapwallimgs[i],(int(i*(width/8)+width/16),int(0.5*0.1*height)))
+    
     for event in pygame.event.get():
         if event.type == KEYDOWN:
             if event.key == K_ESCAPE:
@@ -311,6 +364,8 @@ def mapeditor(mapwidth):
             elif event.key == K_6:
                 curr_colour = 6
             elif event.key == K_SPACE:
+                curr_colour = 8
+            elif event.key == K_7:
                 curr_colour = 7
             if event.key == K_UP:
                 size +=1
@@ -329,34 +384,45 @@ def mapeditor(mapwidth):
         mx,my = pygame.mouse.get_pos()
         mx = int(mx/mapw)
         my = int(my/maph)
-        if curr_colour != 7:
+        if curr_colour != 8:
             for x in range(size):
                 if mx+x < mapwidth:
                     for y in range(size):
                         if my+y < mapwidth:
-                            worldMap[mx+x][my+y] = curr_colour
+                            if (mx+x >0 and mx+x < mapwidth-1 and my+y > 0 and my+y < mapheight-1) or curr_colour >0:
+                                worldMap[mx+x][my+y] = curr_colour
         else:
-            worldMap[int(posX)][int(posY)] = 0
-            worldMap[mx][my] = curr_colour
-            posX = mx+0.5
-            posY = my+0.5
+            if mx >0 and mx < mapwidth-1 and my > 0 and my < mapheight-1: 
+                worldMap[int(posX)][int(posY)] = 0
+                worldMap[mx][my] = curr_colour
+                posX = mx+0.5
+                posY = my+0.5
     
     pygame.display.update()
 #main program
 def main(posX,posY,worldMap,resolution):
+    numz = 0
+    sprites = []
     #removing monsters and player from map, and adding monsters to sprite list
+    ammoimg = pygame.image.load('ammo.png').convert_alpha()
+    ammoimg = pygame.transform.scale(ammoimg,(100,100))
     fixedworldmap = worldMap
     for x in range(len(worldMap)):
         for y in range(len(worldMap[x])):
             if worldMap[x][y] == 6:
-                monsty = Monster(x+0.5,y+0.5,1,5,0.02,zombieimgs,bloods)
-                sprites.append(monsty)
+                a = Monster(x+0.5,y+0.5,0,0,0,ammoimg,bloods,1)
+                sprites.append(a)
                 worldMap[x][y] = 0
             if worldMap[x][y] == 7:
+                monsty = Monster(x+0.5,y+0.5,1,5,0.02,zombieimgs,bloods,0)
+                sprites.append(monsty)
+                numz+=1
+                worldMap[x][y] = 0
+            if worldMap[x][y] == 8:
                 posX = x+0.5
                 posY = y+0.5
                 worldMap[x][y] = 0
-                #a lot of variables
+    #a lot of variables
     health = 5  
     gameover = False
     numsprites = len(sprites)
@@ -397,6 +463,9 @@ def main(posX,posY,worldMap,resolution):
     startx = 0
     fpsnum = 0
     fpstotal = 0
+    ammocount = 6
+    reload =False
+    unloaded_ammo = 4
     #images for the map
     mapzomimg = pygame.image.load('zombie1.png').convert_alpha()
     mapzomimg = pygame.transform.scale(mapzomimg,(mapw+1,maph+1))
@@ -409,7 +478,9 @@ def main(posX,posY,worldMap,resolution):
         mapwallimgs.append(wallimg)
     mapwallimgs.append(mapzomimg)
     mapwallimgs.append(mapplayerimg)
+    maxammo = 6
     #forever repeating game loop
+
     while True:
         walldists = []
         wallcols = []
@@ -522,11 +593,17 @@ def main(posX,posY,worldMap,resolution):
                     wideness = amount+resolution
                     tallness = abs(drawEnd-drawStart)
                     image = slices[teximage][oldtexnum] 
-                    image = pygame.transform.scale(image,(wideness,tallness))
+                    divisor = tallness/100
+                    
                     if drawStart < 0:
-                        #chops image so top doesnt show
-                        image = pygame.transform.chop(image,(0,0,0,abs(drawStart)))
+                        #chops image so top doesnt show  
+                        stuff = abs(tallness-height)/divisor
+                        
+                        image = pygame.transform.chop(image,(0,0,0,abs(drawStart)/divisor))
+
                         drawStart = 0
+                        tallness = height
+                    image = pygame.transform.scale(image,(wideness,tallness))
                     screen.blit(image,(startx,drawStart))
                     if shade > 10:
                         #darkens depending on how far away it is
@@ -553,7 +630,7 @@ def main(posX,posY,worldMap,resolution):
         #put sprites in order by distance
         while checks > 0:
             checks = 0
-            for i in range(numsprites-1):
+            for i in range(len(sprites)-1):
                 if sprites[i].dist< sprites[i+1].dist:
                     curr_spr = sprites[i]
                     replaced_spr = sprites[i+1]
@@ -564,14 +641,14 @@ def main(posX,posY,worldMap,resolution):
         while checks > 0:
             checks = 0
             for i in range(len(bloodsprites)-1):
-                if bloodsprites[i].dist< bloodsprites[i+1].dist:
-                    curr_spr = bloodsprites[i]
-                    replaced_spr = bloodsprites[i+1]
-                    bloodsprites[i] = replaced_spr
-                    bloodsprites[i+1] = curr_spr
-                    checks +=1
-        
-        for i in range(numsprites):
+                if i < len(bloodsprites):
+                    if bloodsprites[i].dist< bloodsprites[i+1].dist:
+                        curr_spr = bloodsprites[i]
+                        replaced_spr = bloodsprites[i+1]
+                        bloodsprites[i] = replaced_spr
+                        bloodsprites[i+1] = curr_spr
+                        checks +=1
+        for i in range(len(sprites)):
             #calculate things for drawing sprites
             spritex = sprites[i].x - posX
             spritey = sprites[i].y - posY
@@ -581,7 +658,7 @@ def main(posX,posY,worldMap,resolution):
             if transformy == 0:
                 transformy = 0.1
             vMove = 0.0
-            if sprites[i].health <= 0:
+            if sprites[i].health <= 0 and sprites[i].type == 0:
                 vMove = 300
             vMoveScreen = int(vMove/transformy)
             if transformy == 0:
@@ -606,21 +683,23 @@ def main(posX,posY,worldMap,resolution):
             if spriteHeight > maxsize:
                 spriteHeight =maxsize
                 spriteWidth = maxsize
-            darkness = int(sprites[i].dist**2/4)
+            darkness = int(sprites[i].dist**2/6)
             if darkness < 0:
                 darkness = 0
             if darkness > 5:
                 darkness = 5
-            if sprites[i].health <= 0:
-                img = dedzedimg
+            if sprites[i].type == 0:
+                if sprites[i].health <= 0:
+                    img = dedzedimg
+                else:
+                    img = sprites[i].zombieimage[darkness]
             else:
-                img = sprites[i].zombieimage[darkness]
-            
-            sprites[i].drawn = False
+                img = sprites[i].zombieimage
+            # sprites[i].drawn = False
             sprites[i].startx = drawStartX
             sprites[i].starty = drawStartY  
             sprites[i].width = spriteWidth
-            sprites[i].visible = True
+            # sprites[i].visible = True
             if transformy > 0 and drawStartX > -spriteWidth:
                         starting = False
                         cut = False
@@ -641,23 +720,23 @@ def main(posX,posY,worldMap,resolution):
                             # for i in range(pieces+1):
                             #     newimg = pygame.transform.chop(image,(0,0,width-(pwidth*i),0))
                             #     newimg = pygame.transform.chop(newimg,(pwidth,0,pwidth*i,0))
-                            if spriteHeight < maxsize:
-                                if cut:
-                                    img = pygame.transform.scale(img,(spriteWidth,spriteHeight))
-                                    # img = pygame.transform.chop(img,(0,0,spriteWidth-(sprites[i].start),0))
-                                    # img = pygame.transform.chop(img,(sprites[i].end-sprites[i].start,0,sprites[i].start,0))
-                                    # if sprites[i].start > drawStartX+spriteWidth:
-                                    #     screen.blit(img,(drawStartX,drawStartY),(sprites[i].start-drawStartX,0,sprites[i].end-sprites[i].start,spriteHeight))
-                                    # else:
-                                    #     screen.blit(img,(drawStartX,drawStartY),(0,0,sprites[i].end-sprites[i].start,spriteHeight))
-                                    if drawStartX < sprites[i].start:
-                                        screen.blit(img,(sprites[i].start-resolution,drawStartY),((sprites[i].start-drawStartX),0,sprites[i].end-sprites[i].start,spriteHeight))
-                                    else:
-                                        screen.blit(img,(drawStartX,drawStartY),(0,0,sprites[i].end-sprites[i].start,spriteHeight))
-
+                            if spriteHeight < maxsize: 
+                                # if cut:
+                                img = pygame.transform.scale(img,(spriteWidth,spriteHeight))
+                                # img = pygame.transform.chop(img,(0,0,spriteWidth-(sprites[i].start),0))
+                                # img = pygame.transform.chop(img,(sprites[i].end-sprites[i].start,0,sprites[i].start,0))
+                                # if sprites[i].start > drawStartX+spriteWidth:
+                                #     screen.blit(img,(drawStartX,drawStartY),(sprites[i].start-drawStartX,0,sprites[i].end-sprites[i].start,spriteHeight))
+                                # else:
+                                #     screen.blit(img,(drawStartX,drawStartY),(0,0,sprites[i].end-sprites[i].start,spriteHeight))
+                                if drawStartX < sprites[i].start:
+                                    screen.blit(img,(sprites[i].start-resolution,drawStartY),((sprites[i].start-drawStartX),0,sprites[i].end-sprites[i].start,spriteHeight))
                                 else:
-                                    img = pygame.transform.scale(img,(spriteWidth,spriteHeight))
-                                    screen.blit(img,(drawStartX,drawStartY))
+                                    screen.blit(img,(drawStartX,drawStartY),(0,0,sprites[i].end-sprites[i].start,spriteHeight))
+
+                                # else:
+                                #     img = pygame.transform.scale(img,(spriteWidth,spriteHeight))
+                                #     screen.blit(img,(drawStartX,drawStartY))
 
         #animation of blood
         if len(bloodsprites) > 0:
@@ -689,13 +768,14 @@ def main(posX,posY,worldMap,resolution):
                  drawStartY = 0
             img = bloodsprites[i].image
             bloodsprites[i].dist = transformy
-            darkness = int(bloodsprites[i].dist**2/4)         
+            darkness = int(bloodsprites[i].dist**2/6)         
             if transformy > 0 and drawStartX > -spriteWidth and darkness < 5:
                         if spriteHeight > 500:
                             spriteHeight = 500
                             spriteWidth= 500
                         img = pygame.transform.scale(img,(spriteHeight,spriteWidth))
                         screen.blit(img,(drawStartX+bloodsprites[i].offset,drawStartY))
+        pygame.draw.line(screen,(0,0,0),(width,0),(width,height),resolution)
 
         if not gameover:
             #display fps
@@ -712,6 +792,8 @@ def main(posX,posY,worldMap,resolution):
             screen.blit(textsurface,(750,0))
             textsurface = myfont.render('Health: '+str(health), False, (255,255,255))
             screen.blit(textsurface,(400,0))
+            textsurface = myfont.render('Ammo: '+str(ammocount)+'|'+str(unloaded_ammo), False, (255,255,255))
+            screen.blit(textsurface,(10,height-50))
             pygame.draw.rect(screen,(0,0,0),(0,0,mapwidth*mapw,mapheight*maph))
         if not gameover:
             #display world map
@@ -721,7 +803,8 @@ def main(posX,posY,worldMap,resolution):
                         screen.blit(mapwallimgs[worldMap[x][y]-1],(x*mapw,y*maph))
                     if x == int(posX) and y == int(posY):
                         screen.blit(mapwallimgs[6],(x*mapw,y*maph))
-        screen.blit(gunimg,(width/2-(gunwidth/2)-6,height/2-(gunwidth/3)))
+        if not gameover:
+            screen.blit(gunimg,(width/2-(gunwidth/2)-6,height/2-(gunwidth/3)))
         # screen.blit(crosshair,(width/2-(cw/2),height/2-(cw/2)))
         oldTime = time
         time = pygame.time.get_ticks()
@@ -745,15 +828,14 @@ def main(posX,posY,worldMap,resolution):
                 if event.key == K_s:
                     down = True
                     up = False
-                
+                if event.key == K_r:
+                    reload = True
                 if event.key == K_d:
                     straferight = True
                     strafeleft = False
                 if event.key == K_a:
                     strafeleft = True
                     straferight = False
-                if event.key == K_r:
-                    title(0,0,fixedworldmap)
                 if event.key == K_ESCAPE:
                     pygame.quit()
                     sys.exit()
@@ -761,6 +843,8 @@ def main(posX,posY,worldMap,resolution):
             if event.type == MOUSEBUTTONDOWN and not gameover:
                     shoot = True
             elif event.type == KEYUP:
+                if event.key == K_r:
+                    reload = False
                 if event.key == K_d:
                     straferight = False
                 if event.key == K_a:
@@ -775,13 +859,13 @@ def main(posX,posY,worldMap,resolution):
                     shoot = False
         #for the player hitbox
         if dirX >=0:
-            playradx = 0.5
+            playradx = 0
         else:
-            playradx = -0.5
+            playradx = 0
         if dirY>=0:
-            playrady = 0.5
+            playrady = 0
         else:
-            playrady = -0.5
+            playrady = 0
         if up:
                #moving around     
                     if worldMap[int(posX+playradx+dirX*moveSpeed)][int(posY)] in[0,6]:
@@ -797,13 +881,13 @@ def main(posX,posY,worldMap,resolution):
                     if worldMap[int(posX) ][int(posY-playrady-dirY*moveSpeed) ] in[0,6]:
                         posY-=dirY*moveSpeed
         if planeX >=0:
-            playradx = 0.75
+            playradx = 0
         else:
-            playradx = -0.75
+            playradx = 0
         if planeY>=0:
-            playrady = 0.75
+            playrady = 0
         else:
-            playrady = -0.75
+            playrady = 0
         if straferight:
                     
                     if worldMap[int(posX+playradx+planeX*moveSpeed) ][int(posY) ] in[0,6]:
@@ -832,24 +916,39 @@ def main(posX,posY,worldMap,resolution):
                     planeY = oldPlaneX * math.sin(-rotSpeed)+planeY*math.cos(-rotSpeed)
             
         #shooting closest zombie in firing line
-        if shoot and len(sprites)>0 and not gameover:
-            for i in range(len(sprites),-1,-1):
-                if sprites[i-1].health > 0:
-                    if sprites[i-1].start+((3/10)*sprites[i-1].width) < width/2 and sprites[i-1].end- ((3/10)*sprites[i-1].width) > width / 2:
-                        sprites[i-1].health -= 1
-                        bloodsprites.append(blood(sprites[i-1].x,sprites[i-1].y,-sprites[i-1].width/2+(width/2)-sprites[i-1].startx))
-                        if sprites[i-1].health < 1:
-                            sprites[i-1].zombieimage = dedzedimg
+        if reload and not gameover and unloaded_ammo>0 and ammocount < maxammo:
+            amount_to_reload = maxammo - ammocount
+            if amount_to_reload > unloaded_ammo:
+                amount_to_reload = unloaded_ammo
+            ammocount+=amount_to_reload
+            unloaded_ammo -= amount_to_reload
+            reload = False
+        if shoot and not gameover and ammocount >0:
+            ammocount -=1
+            if numz > 0:
+                for i in range(len(sprites),-1,-1):
+                    if sprites[i-1].type == 0:
+                        if sprites[i-1].health > 0:
+                            if sprites[i-1].start+((3/10)*sprites[i-1].width) < width/2 and sprites[i-1].end- ((3/10)*sprites[i-1].width) > width / 2:
+                                sprites[i-1].health -= 1
+                                bloodsprites.append(blood(sprites[i-1].x,sprites[i-1].y,-sprites[i-1].width/2+(width/2)-sprites[i-1].startx))
+                                if sprites[i-1].health < 1:
+                                    sprites[i-1].zombieimage = dedzedimg
+                                    numz -= 1
 
-                        break
-            shoot = False
+                                break
+                shoot = False
         if not gameover:
             #going through monster functions
-            for i in range(numsprites):
-                if sprites[i].health > 0:
-                    sprites[i].cooldown -= 1
-                    sprites[i].move(posX,posY,playerrad,sprites,i,resolution,frameTime)
-                    health = sprites[i].check_attack(posX,posY,health)
+            for i in range(len(sprites)-1):
+                if i < len(sprites):
+                    if sprites[i].type == 0:
+                        if sprites[i].health > 0:
+                            sprites[i].cooldown -= 1
+                            sprites[i].move(posX,posY,playerrad,sprites,i,resolution,frameTime)
+                            health = sprites[i].check_attack(posX,posY,health)
+                    elif sprites[i].type == 1:
+                        sprites,unloaded_ammo = sprites[i].check_collide(posX,posY,sprites,unloaded_ammo,i)
 
         if health <= 0:
             gameover = True
