@@ -1,14 +1,12 @@
 #importing buncha stuff
 from cmath import tanh
-from datetime import MAXYEAR
-from tracemalloc import start
 import pygame, sys, math, pathfinding,random
 from pygame.locals import *
 #initialise python and fonts
 pygame.init()
 pygame.font.init()
 #width and height in cells of the map
-mapwidth = 50
+mapwidth = 30
 mapheight =mapwidth
 #max size an image can be
 maxsize = 850
@@ -44,7 +42,13 @@ def cut_img(image, pieces,width,height):
     
     return list_of_pieces[ ::-1]
 #images loaded for the dead zombies
-dedzedimg = pygame.image.load('deadzed.png').convert_alpha()
+dedzedimgs = []
+deadzshadow = pygame.image.load('deadzshadow.png').convert_alpha()
+for i in range(11):
+    dedzedimg = pygame.image.load('deadzed.png').convert_alpha()
+    for x in range(i):
+        dedzedimg.blit(deadzshadow,(0,0))
+    dedzedimgs.append(dedzedimg)
 #now unused function which vertically cut images(tried to use it for the floor)
 def cut_img_horizontal(image, pieces,width,height):
     image = pygame.transform.scale(image,(width,height))
@@ -66,9 +70,18 @@ for i in range(5):
 bloods = []
 numbloods = 5
 for i in range(numbloods):
-    img = pygame.image.load('blood'+str(i+1)+'.png').convert_alpha()
-    img = pygame.transform.scale(img,(500,500))
-    bloods.append(img)
+    bloodshade = []
+    
+    for x in range(11):
+        img = pygame.image.load('blood'+str(i+1)+'.png').convert_alpha()
+        img = pygame.transform.scale(img,(500,500))
+        shadow = pygame.image.load('bloodshadow'+str(i+1)+'.png').convert_alpha()
+        shadow = pygame.transform.scale(shadow,(500,500))
+        for y in range(x):
+            img.blit(shadow,(0,0))
+        bloodshade.append(img)
+    
+    bloods.append(bloodshade)
     #opening the maze file and reading in the data
 file = open('maze1.txt','r')
 worldMap = file.readlines()
@@ -88,21 +101,25 @@ posX = 0
 posY = 0
 #setting up list of blood sprites
 bloodsprites = []
+
 #setting up a class for the blood sprites which just chooses what image they are pretty much
 class blood:
-    def __init__(self,x,y,offset):
+    def __init__(self,x,y,offset,dist):
         self.x = x
         self.y = y
-        self.image = bloods[0]
+        self.image = bloods[0][10]
         self.bloodtime = 0
-        self.dist = 0
+        self.dist = dist
         self.offset = offset
     def existence(self, bloodsprites,i):
         self.bloodtime += 1/10
         bloodimg = int(self.bloodtime*4)
+        darkness = int(self.dist**2/6)
         if bloodimg >4:
             bloodimg = 4
-        self.image = bloods[bloodimg]
+        if darkness > 10:
+            darkness = 10
+        self.image = bloods[bloodimg][darkness]
         if self.bloodtime > 1:
             del bloodsprites[i]
 # a lot of stuff in this class to tell monsters what to do
@@ -129,6 +146,7 @@ class Monster:
     def __init__(self,posx,posy,damage,health, speed,zombieimage,bloods,type):
         #lotta variables
         self.num = 0
+        self.shootable = False
         self.x = posx
         self.y = posy
         self.width = 0
@@ -156,6 +174,7 @@ class Monster:
         self.starty = 0
         self.scale = 0
         self.type = type
+        self.woundlist = []
     def check_collide(self,playerx,playery,ammosprites,ammo_count,ammonum):
         o = self.x - playerx
         a = self.y - playery
@@ -165,59 +184,61 @@ class Monster:
             ammo_count+=6
         return ammosprites,ammo_count
     def move(self,playerx,playery,playerrad,sprites,znum,res,frameTime):
-        #decides where they go with pathfinding in separate file
-        destx = playerx
-        desty = playery
-        o = self.x-playerx
-        a = self.y-playery
-        fullhyp = math.sqrt(o**2+a**2)
-        if len(self.path) < 1:
-            self.pathfindcooldown = 0
-        if fullhyp >= 20 and self.start == self.end:
-            self.findingpath = False
-        if ((self.start != self.end) or self.findingpath) and self.pathfindcooldown<1:
-                self.path = pathfinding.astar(worldMap,(int(self.x)+0.5,int(self.y)+0.5),(int(playerx)+0.5,int(playery)+0.5))
-                if len(self.path) > 1:
-                    del self.path[0]
-                self.pathfindcooldown = 60 
-                self.findingpath = True
-                if self.path[0] == 'no':
-                    self.findingpath = False
-        if self.findingpath:        
-            destx = self.path[0][0]
-            desty = self.path[0][1]
-            
-            o = destx - self.x
-            a = desty - self.y
-        if a == 0:
-            a = 0.000000000000000000000000001
-
-        angle = math.atan(o/a)
-        hyp = self.speed
-        newo = math.sin(angle)*hyp
-        newa = math.cos(angle)*hyp
-        if desty < self.y:
-            newa = -newa
-            newo = -newo
-        
-        if fullhyp >= playerrad and self.findingpath:
-            newx = self.x+newo
-            newy = self.y+newa
-            move=True
-
-            if move:
-                    if worldMap[int(newx)][int(self.y)] == 0 or worldMap[int(newx)][int(self.y)] == 6:
-                
-                    
-                        self.x=newx
-                    if worldMap[int(self.x)][int(newy)] == 0 or worldMap[int(self.x)][int(newy)] == 6:
-
-                        self.y=newy
-            if self.x > destx -0.2 and self.x < destx +0.2:
-                if self.y > desty -0.2 and self.y < desty +0.2:
+            #decides where they go with pathfinding in separate file
+            destx = playerx
+            desty = playery
+            o = self.x-playerx
+            a = self.y-playery
+            fullhyp = math.sqrt(o**2+a**2)
+            if len(self.path) < 1:
+                self.pathfindcooldown = 0
+            if fullhyp >= 20 and self.start == self.end:
+                self.findingpath = False
+            if ((self.start != self.end) or self.findingpath) and self.pathfindcooldown<1:
+                    self.path = pathfinding.astar(worldMap,(int(self.x)+0.5,int(self.y)+0.5),(int(playerx)+0.5,int(playery)+0.5))
                     if len(self.path) > 1:
                         del self.path[0]
-        self.pathfindcooldown -= 1
+                    self.pathfindcooldown = 60 
+                    self.findingpath = True
+                    if self.path[0] == 'no':
+                        self.findingpath = False
+            if self.findingpath:        
+                destx = self.path[0][0]
+                desty = self.path[0][1]
+                
+                o = destx - self.x
+                a = desty - self.y
+            if a == 0:
+                a = 0.000000000000000000000000001
+
+            angle = math.atan(o/a)
+            hyp = self.speed
+            newo = math.sin(angle)*hyp
+            newa = math.cos(angle)*hyp
+            if desty < self.y:
+                newa = -newa
+                newo = -newo
+            
+            if fullhyp >= playerrad and self.findingpath:
+                newx = self.x+newo
+                newy = self.y+newa
+                move=True
+
+                if move:
+                        if worldMap[int(newx)][int(self.y)] == 0 or worldMap[int(newx)][int(self.y)] == 6:
+                    
+                        
+                            self.x=newx
+                        if worldMap[int(self.x)][int(newy)] == 0 or worldMap[int(self.x)][int(newy)] == 6:
+
+                            self.y=newy
+                if self.x > destx -0.2 and self.x < destx +0.2:
+                    if self.y > desty -0.2 and self.y < desty +0.2:
+                        if len(self.path) > 1:
+                            del self.path[0]
+            self.pathfindcooldown -= 1
+    
+
  
 
     #checks if they can attack
@@ -230,9 +251,7 @@ class Monster:
             self.cooldown = 180
         return health
 #sets up list of zombie images so they get darker further away
-zombieimgs = []
-for i in range(1,7,1):
-    zombieimgs.append(pygame.image.load('zombie'+str(i)+'.png').convert_alpha())
+
 #sets what events are allowed
 pygame.event.set_allowed([QUIT, KEYDOWN, KEYUP])
 zomimg = pygame.image.load('zombie1.png').convert_alpha()
@@ -296,7 +315,7 @@ def mapeditor(mapwidth):
  mapzomimg = pygame.transform.scale(mapzomimg,(mapw+1,maph+1))
  mapplayerimg = pygame.image.load('player.png').convert_alpha()
  mapplayerimg = pygame.transform.scale(mapplayerimg,(mapw+1,maph+1))
- mapammoimg = pygame.transform.scale(pygame.image.load('ammo.png').convert_alpha(),(mapw+1,maph+1))
+ mapammoimg = pygame.transform.scale(pygame.image.load('ammo1.png').convert_alpha(),(mapw+1,maph+1))
  mapwallimgs = []
  for i in range(5):
     wallimg = pygame.image.load('wallimg'+str(i)+'.png').convert_alpha()
@@ -310,6 +329,7 @@ def mapeditor(mapwidth):
  pygame.mouse.set_visible(False)
  while True:   
     screen.fill((0,0,0))
+    
     #displaying map
     for x in range(mapwidth):
         for y in range(mapheight):
@@ -329,7 +349,7 @@ def mapeditor(mapwidth):
         textsurface = myfont.render((str(i+1)+':'), False, (255,255,255))
         screen.blit(textsurface,(int(i*(width/8)),int(0.1*0.1*height)))
         if i+1 == 6:
-            placeimg = pygame.transform.scale(pygame.image.load('ammo.png').convert_alpha(),(int(0.8*0.1*height),int(0.8*0.1*height)))
+            placeimg = pygame.transform.scale(pygame.image.load('ammo1.png').convert_alpha(),(int(0.8*0.1*height),int(0.8*0.1*height)))
         elif i+1 == 7:
             placeimg = pygame.transform.scale(pygame.image.load('zombie1.png').convert_alpha(),(int(0.8*0.1*height),int(0.8*0.1*height)))
         elif i+1 == 8:
@@ -403,17 +423,30 @@ def mapeditor(mapwidth):
 def main(posX,posY,worldMap,resolution):
     numz = 0
     sprites = []
+    ashadow = pygame.transform.scale(pygame.image.load('ashadow.png').convert_alpha(),(50,50))
+    zshadow = pygame.image.load('zshadow.png').convert_alpha()
     #removing monsters and player from map, and adding monsters to sprite list
-    ammoimg = pygame.image.load('ammo.png').convert_alpha()
-    ammoimg = pygame.transform.scale(ammoimg,(100,100))
+    ammoimgs = []
+    for i in range(11):
+        ammoimg = pygame.image.load('ammo1.png').convert_alpha()
+        ammoimg = pygame.transform.scale(ammoimg,(50,50))
+        for x in range(i):
+            ammoimg.blit(ashadow,(0,0))
+        ammoimgs.append(ammoimg)
     fixedworldmap = worldMap
     for x in range(len(worldMap)):
         for y in range(len(worldMap[x])):
             if worldMap[x][y] == 6:
-                a = Monster(x+0.5,y+0.5,0,0,0,ammoimg,bloods,1)
+                a = Monster(x+0.5,y+0.5,0,0,0,ammoimgs,bloods,1)
                 sprites.append(a)
                 worldMap[x][y] = 0
             if worldMap[x][y] == 7:
+                zombieimgs = []
+                for i in range(11):
+                    zimg = pygame.image.load('zombie1.png').convert_alpha()
+                    for z in range(i):
+                        zimg.blit(zshadow,(0,0))
+                    zombieimgs.append(zimg)
                 monsty = Monster(x+0.5,y+0.5,1,5,0.02,zombieimgs,bloods,0)
                 sprites.append(monsty)
                 numz+=1
@@ -479,9 +512,17 @@ def main(posX,posY,worldMap,resolution):
     mapwallimgs.append(mapzomimg)
     mapwallimgs.append(mapplayerimg)
     maxammo = 6
+    woundimg = pygame.image.load('bullet_wound.png').convert_alpha()
+    woundimg = pygame.transform.scale(woundimg,(5,5))
     #forever repeating game loop
-
+    num_of_zombies = 0
+    bshadow = pygame.image.load('bshadow.png').convert_alpha()
     while True:
+        num_of_zombies = 0
+        for i in range(len(sprites)):
+            if sprites[i].type == 0:
+                if sprites[i].health > 0:
+                    num_of_zombies+=1
         walldists = []
         wallcols = []
         frame +=1
@@ -507,6 +548,7 @@ def main(posX,posY,worldMap,resolution):
         #goes through every [insert resolution]th pixel on screen
         startx = 0
         amount = 0
+        
         for x in range(0,(width+resolution),resolution):
             #i really don't understand much of this, got the maths from lodedevs tutorial
             cameraX = 2*x/float(width)-1
@@ -642,7 +684,7 @@ def main(posX,posY,worldMap,resolution):
             checks = 0
             for i in range(len(bloodsprites)-1):
                 if i < len(bloodsprites):
-                    if bloodsprites[i].dist< bloodsprites[i+1].dist:
+                    if bloodsprites[i].dist> bloodsprites[i+1].dist:
                         curr_spr = bloodsprites[i]
                         replaced_spr = bloodsprites[i+1]
                         bloodsprites[i] = replaced_spr
@@ -650,6 +692,7 @@ def main(posX,posY,worldMap,resolution):
                         checks +=1
         for i in range(len(sprites)):
             #calculate things for drawing sprites
+            
             spritex = sprites[i].x - posX
             spritey = sprites[i].y - posY
             invDet = 1.0 / (planeX*dirY-dirX*planeY)
@@ -658,13 +701,15 @@ def main(posX,posY,worldMap,resolution):
             if transformy == 0:
                 transformy = 0.1
             vMove = 0.0
-            if sprites[i].health <= 0 and sprites[i].type == 0:
+            if (sprites[i].health <= 0 and sprites[i].type == 0) or sprites[i].type == 1:
                 vMove = 300
             vMoveScreen = int(vMove/transformy)
             if transformy == 0:
                 transformy = 1
             spriteScreenX = int((width / 2) * (1 + transformx / transformy))
             spriteHeight = abs(int(height / (transformy)))
+            if sprites[i].type == 1:
+                spriteHeight/=2
             drawStartY = int(-spriteHeight / 2 + height / 2+vMoveScreen)
             drawEndY = int(spriteHeight / 2 + height / 2+vMoveScreen)
             if drawEndY >= height:
@@ -684,17 +729,20 @@ def main(posX,posY,worldMap,resolution):
                 spriteHeight =maxsize
                 spriteWidth = maxsize
             darkness = int(sprites[i].dist**2/6)
+            if sprites[i].type == 1:
+                #because ammo is lower down so to prevent clashes with zombies and ammo
+                sprites[i].dist-=0.5
             if darkness < 0:
                 darkness = 0
-            if darkness > 5:
-                darkness = 5
+            if darkness > 10:
+                darkness = 10
             if sprites[i].type == 0:
                 if sprites[i].health <= 0:
-                    img = dedzedimg
+                    img = dedzedimgs[darkness]
                 else:
                     img = sprites[i].zombieimage[darkness]
             else:
-                img = sprites[i].zombieimage
+                img = sprites[i].zombieimage[darkness]
             # sprites[i].drawn = False
             sprites[i].startx = drawStartX
             sprites[i].starty = drawStartY  
@@ -709,13 +757,14 @@ def main(posX,posY,worldMap,resolution):
                         for x in range(drawStartX,drawEndX):
                                 if walldists[x] < sprites[i].dist:
                                     cut = True
+
                                 else:
                                      if starting:
                                          sprites[i].end = x
                                      else:
                                          sprites[i].start = x
                                          starting = True
-                        if darkness < 5:
+                        if darkness < 10:
                             # pwidth = width/pieces
                             # for i in range(pieces+1):
                             #     newimg = pygame.transform.chop(image,(0,0,width-(pwidth*i),0))
@@ -729,19 +778,26 @@ def main(posX,posY,worldMap,resolution):
                                 #     screen.blit(img,(drawStartX,drawStartY),(sprites[i].start-drawStartX,0,sprites[i].end-sprites[i].start,spriteHeight))
                                 # else:
                                 #     screen.blit(img,(drawStartX,drawStartY),(0,0,sprites[i].end-sprites[i].start,spriteHeight))
-                                if drawStartX < sprites[i].start:
+                         
+                                if drawStartX <= sprites[i].start:
                                     screen.blit(img,(sprites[i].start-resolution,drawStartY),((sprites[i].start-drawStartX),0,sprites[i].end-sprites[i].start,spriteHeight))
                                 else:
-                                    screen.blit(img,(drawStartX,drawStartY),(0,0,sprites[i].end-sprites[i].start,spriteHeight))
-
-                                # else:
+                                    screen.blit(img,(drawStartX,drawStartY),(0,0,sprites[i].end-sprites[i].start-4,spriteHeight))
+                        
+                        # for x in range(len(sprites[i].woundlist)):
+                        #     if sprites[i].startx+sprites[i].woundlist[x][0] >= sprites[i].start and sprites[i].startx+sprites[i].woundlist[x][0] <= sprites[i].end:
+                        #         wound_image = pygame.transform.scale(woundimg,(int(spriteWidth/20),int(spriteHeight/20)))
+                        #         screen.blit(wound_image,(sprites[i].startx+sprites[i].woundlist[x][0]+sprites[i].width/2,sprites[i].woundlist[x][1])) 
+                        if sprites[i].start< width/2+(3/10*(sprites[i].start-sprites[i].end)) and sprites[i].end-resolution > width/2-(3/10*(sprites[i].start-sprites[i].end)):
+                            sprites[i].shootable = True
+                        else:
+                            sprites[i].shootable = False                                # else:
                                 #     img = pygame.transform.scale(img,(spriteWidth,spriteHeight))
                                 #     screen.blit(img,(drawStartX,drawStartY))
-
         #animation of blood
         if len(bloodsprites) > 0:
-            for i in range(len(bloodsprites)):
-                bloodsprites[i-1].existence(bloodsprites,i-1)
+            for i in range(len(bloodsprites)-1,-1,-1):
+                bloodsprites[i].existence(bloodsprites,i)
                 if len(bloodsprites) <= 0:
                     break
         #displaying blood sprites
@@ -769,7 +825,7 @@ def main(posX,posY,worldMap,resolution):
             img = bloodsprites[i].image
             bloodsprites[i].dist = transformy
             darkness = int(bloodsprites[i].dist**2/6)         
-            if transformy > 0 and drawStartX > -spriteWidth and darkness < 5:
+            if transformy > 0 and drawStartX > -spriteWidth and darkness < 10:
                         if spriteHeight > 500:
                             spriteHeight = 500
                             spriteWidth= 500
@@ -794,6 +850,8 @@ def main(posX,posY,worldMap,resolution):
             screen.blit(textsurface,(400,0))
             textsurface = myfont.render('Ammo: '+str(ammocount)+'|'+str(unloaded_ammo), False, (255,255,255))
             screen.blit(textsurface,(10,height-50))
+            textsurface = myfont.render('Zombies: '+str(num_of_zombies), False, (255,255,255))
+            screen.blit(textsurface,(width*0.8,height-50))
             pygame.draw.rect(screen,(0,0,0),(0,0,mapwidth*mapw,mapheight*maph))
         if not gameover:
             #display world map
@@ -869,10 +927,8 @@ def main(posX,posY,worldMap,resolution):
         if up:
                #moving around     
                     if worldMap[int(posX+playradx+dirX*moveSpeed)][int(posY)] in[0,6]:
-                        
-                            posX+=dirX*moveSpeed
+                        posX+=dirX*moveSpeed
                     if worldMap[int(posX) ][int(posY+playrady+dirY*moveSpeed)] in[0,6]:
-                       
                             posY+=dirY*moveSpeed
         if down:
                     
@@ -929,18 +985,35 @@ def main(posX,posY,worldMap,resolution):
                 for i in range(len(sprites),-1,-1):
                     if sprites[i-1].type == 0:
                         if sprites[i-1].health > 0:
-                            if sprites[i-1].start+((3/10)*sprites[i-1].width) < width/2 and sprites[i-1].end- ((3/10)*sprites[i-1].width) > width / 2:
+                            if sprites[i-1].shootable:
+                            # if sprites[i-1].start+((3/10)*sprites[i-1].width) < width/2 and (sprites[i-1].startx+sprites[i-1].width)- ((3/10)*sprites[i-1].width) > width / 2:
                                 sprites[i-1].health -= 1
-                                bloodsprites.append(blood(sprites[i-1].x,sprites[i-1].y,-sprites[i-1].width/2+(width/2)-sprites[i-1].startx))
-                                if sprites[i-1].health < 1:
-                                    sprites[i-1].zombieimage = dedzedimg
-                                    numz -= 1
+                                pixel = (width/2-sprites[i-1].startx)/sprites[i-1].width*100
+                                if pixel > 30 and pixel < 71:
+                                    if pixel > 43 and pixel < 52:
+                                        rng= random.randint(15,65)
+                                    elif pixel > 39 and pixel <57:
+                                        rng= random.randint(32,65)
+                                    else:
+                                        rng= random.randint(47,50)
+                                    for x in range(11): 
+                                        copyofzimage = sprites[i-1].zombieimage[x]
+                                        woundimg = pygame.image.load('bullet_wound.png').convert_alpha()
+                                        for j in range(x):
+                                            woundimg.blit(bshadow,(0,0))
+                                        copyofzimage.blit(woundimg,(((width/2-sprites[i-1].startx)/sprites[i-1].width*100),rng))
+                                        sprites[i-1].zombieimage[x] = copyofzimage
+                                    bloodsprites.append(blood(sprites[i-1].x,sprites[i-1].y,-sprites[i-1].width/2+(width/2)-sprites[i-1].startx,sprites[i-1].dist))
+                                    if sprites[i-1].health < 1:
+                                        sprites[i-1].zombieimage = dedzedimg
+                                        numz -= 1
+                                        sprites[i-1].woundlist = []
 
-                                break
+                                    break
                 shoot = False
         if not gameover:
             #going through monster functions
-            for i in range(len(sprites)-1):
+            for i in range(len(sprites)):
                 if i < len(sprites):
                     if sprites[i].type == 0:
                         if sprites[i].health > 0:
