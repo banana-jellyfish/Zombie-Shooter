@@ -2,6 +2,8 @@
 from cmath import tanh
 import pygame, sys, math, pathfinding,random
 from pygame.locals import *
+import numpy as np
+from numba import njit
 #initialise python and fonts
 pygame.init()
 pygame.font.init()
@@ -455,6 +457,15 @@ def main(posX,posY,worldMap,resolution):
                 posX = x+0.5
                 posY = y+0.5
                 worldMap[x][y] = 0
+    hres = 100
+    halfvres = 100
+    mod = hres/60
+    rot = 0
+    fram = np.random.uniform(0,1,(hres,halfvres*2,3))
+    sky = pygame.image.load('sky.jpg').convert()
+    sky = pygame.transform.scale(sky,(700,360))
+    sky = pygame.surfarray.array3d(pygame.transform.scale(sky,(360,halfvres*2)))
+    floor = pygame.surfarray.array3d(pygame.transform.scale(pygame.image.load('wallimg1.png').convert(),(100,100)))
     #a lot of variables
     health = 5  
     gameover = False
@@ -546,6 +557,14 @@ def main(posX,posY,worldMap,resolution):
         #fill screen with black
         screen.fill((0,0,0))
         #goes through every [insert resolution]th pixel on screen
+        fram = new_frame(-posX,posY,rot,fram,sky,floor,hres,halfvres,mod)
+                # if int(x)%2 == int(y)%2:
+                #     frame[i][halfvres*2-j-1] = [0,0,0]
+                # else:
+                #     frame[i][halfvres*2-j-1] = [1,1,1]
+        surf = pygame.surfarray.make_surface(fram*255)
+        surf = pygame.transform.scale(surf,(width,height))
+        screen.blit(surf,(0,0))
         startx = 0
         amount = 0
         
@@ -613,7 +632,7 @@ def main(posX,posY,worldMap,resolution):
             #end of drawing(y)
             drawEnd = int(lineHeight/2+h/2)
             #how dark the wall is
-            shade = int(perpWallDist**3)
+            shade = int(perpWallDist**2)
             if side == 0:
                 wallX = posY + perpWallDist * rayDirY
             else:
@@ -630,34 +649,34 @@ def main(posX,posY,worldMap,resolution):
             texnum = int(texX/resolution)
             if oldtexnum != texnum or x == width:
                 #if wall isn't completely black, draw slice of texture and put shade over that
-                if shade < 255:
-                    #how wide and tall texture is scaled to
-                    wideness = amount+resolution
-                    tallness = abs(drawEnd-drawStart)
-                    image = slices[teximage][oldtexnum] 
-                    divisor = tallness/100
+                # if shade < 255:
+                #how wide and tall texture is scaled to
+                wideness = amount+resolution
+                tallness = abs(drawEnd-drawStart)
+                image = slices[teximage][oldtexnum] 
+                divisor = tallness/100
+                
+                if drawStart < 0:
+                    #chops image so top doesnt show  
+                    stuff = abs(tallness-height)/divisor
                     
-                    if drawStart < 0:
-                        #chops image so top doesnt show  
-                        stuff = abs(tallness-height)/divisor
-                        
-                        image = pygame.transform.chop(image,(0,0,0,abs(drawStart)/divisor))
+                    image = pygame.transform.chop(image,(0,0,0,abs(drawStart)/divisor))
 
-                        drawStart = 0
-                        tallness = height
-                    image = pygame.transform.scale(image,(wideness,tallness))
-                    screen.blit(image,(startx,drawStart))
-                    if shade > 10:
-                        #darkens depending on how far away it is
-                        s = pygame.Surface((amount+resolution,abs(drawEnd-drawStart)))  
-                        s.set_alpha(shade)
-                        s.fill((0,0,0))           
-                        screen.blit(s, (startx,drawStart))
-                    if side == 1:
-                        s = pygame.Surface((wideness,tallness))  
-                        s.set_alpha(128)                
-                        s.fill((0,0,0))           
-                        screen.blit(s, (startx,drawStart))
+                    drawStart = 0
+                    tallness = height
+                image = pygame.transform.scale(image,(wideness,tallness))
+                screen.blit(image,(startx,drawStart))
+                if shade > 1:
+                    #darkens depending on how far away it is
+                    s = pygame.Surface((amount+resolution,abs(drawEnd-drawStart)))  
+                    s.set_alpha(shade)
+                    s.fill((0,0,0))           
+                    screen.blit(s, (startx,drawStart))
+                if side == 1:
+                    s = pygame.Surface((wideness,tallness))  
+                    s.set_alpha(128)                
+                    s.fill((0,0,0))           
+                    screen.blit(s, (startx,drawStart))
                 for i in range(resolution+amount):
                 #find out how far each wall is to comapare it to monsters
                     walldists.append(perpWallDist)
@@ -728,7 +747,7 @@ def main(posX,posY,worldMap,resolution):
             if spriteHeight > maxsize:
                 spriteHeight =maxsize
                 spriteWidth = maxsize
-            darkness = int(sprites[i].dist**2/6)
+            darkness = int(sprites[i].dist/1.5)
             if sprites[i].type == 1:
                 #because ammo is lower down so to prevent clashes with zombies and ammo
                 sprites[i].dist-=0.5
@@ -764,25 +783,25 @@ def main(posX,posY,worldMap,resolution):
                                      else:
                                          sprites[i].start = x
                                          starting = True
-                        if darkness < 10:
-                            # pwidth = width/pieces
-                            # for i in range(pieces+1):
-                            #     newimg = pygame.transform.chop(image,(0,0,width-(pwidth*i),0))
-                            #     newimg = pygame.transform.chop(newimg,(pwidth,0,pwidth*i,0))
-                            if spriteHeight < maxsize: 
-                                # if cut:
-                                img = pygame.transform.scale(img,(spriteWidth,spriteHeight))
-                                # img = pygame.transform.chop(img,(0,0,spriteWidth-(sprites[i].start),0))
-                                # img = pygame.transform.chop(img,(sprites[i].end-sprites[i].start,0,sprites[i].start,0))
-                                # if sprites[i].start > drawStartX+spriteWidth:
-                                #     screen.blit(img,(drawStartX,drawStartY),(sprites[i].start-drawStartX,0,sprites[i].end-sprites[i].start,spriteHeight))
-                                # else:
-                                #     screen.blit(img,(drawStartX,drawStartY),(0,0,sprites[i].end-sprites[i].start,spriteHeight))
-                         
-                                if drawStartX <= sprites[i].start:
-                                    screen.blit(img,(sprites[i].start-resolution,drawStartY),((sprites[i].start-drawStartX),0,sprites[i].end-sprites[i].start,spriteHeight))
-                                else:
-                                    screen.blit(img,(drawStartX,drawStartY),(0,0,sprites[i].end-sprites[i].start-4,spriteHeight))
+                        
+                        # pwidth = width/pieces
+                        # for i in range(pieces+1):
+                        #     newimg = pygame.transform.chop(image,(0,0,width-(pwidth*i),0))
+                        #     newimg = pygame.transform.chop(newimg,(pwidth,0,pwidth*i,0))
+                        if spriteHeight < maxsize: 
+                            # if cut:
+                            img = pygame.transform.scale(img,(spriteWidth,spriteHeight))
+                            # img = pygame.transform.chop(img,(0,0,spriteWidth-(sprites[i].start),0))
+                            # img = pygame.transform.chop(img,(sprites[i].end-sprites[i].start,0,sprites[i].start,0))
+                            # if sprites[i].start > drawStartX+spriteWidth:
+                            #     screen.blit(img,(drawStartX,drawStartY),(sprites[i].start-drawStartX,0,sprites[i].end-sprites[i].start,spriteHeight))
+                            # else:
+                            #     screen.blit(img,(drawStartX,drawStartY),(0,0,sprites[i].end-sprites[i].start,spriteHeight))
+                        
+                            if drawStartX <= sprites[i].start:
+                                screen.blit(img,(sprites[i].start-resolution,drawStartY),((sprites[i].start-drawStartX),0,sprites[i].end-sprites[i].start,spriteHeight))
+                            else:
+                                screen.blit(img,(drawStartX,drawStartY),(0,0,sprites[i].end-sprites[i].start-4,spriteHeight))
                         
                         # for x in range(len(sprites[i].woundlist)):
                         #     if sprites[i].startx+sprites[i].woundlist[x][0] >= sprites[i].start and sprites[i].startx+sprites[i].woundlist[x][0] <= sprites[i].end:
@@ -824,7 +843,7 @@ def main(posX,posY,worldMap,resolution):
                  drawStartY = 0
             img = bloodsprites[i].image
             bloodsprites[i].dist = transformy
-            darkness = int(bloodsprites[i].dist**2/6)         
+            darkness = int(bloodsprites[i].dist/1.5)         
             if transformy > 0 and drawStartX > -spriteWidth and darkness < 10:
                         if spriteHeight > 500:
                             spriteHeight = 500
@@ -963,6 +982,7 @@ def main(posX,posY,worldMap,resolution):
                     oldPlaneX = planeX
                     planeX = planeX*math.cos(rotSpeed)-planeY*math.sin(rotSpeed)
                     planeY = oldPlaneX * math.sin(rotSpeed)+planeY*math.cos(-rotSpeed)
+                    rot-=(rotSpeed)
         if dir== 'right':
                     oldDirX = float(dirX)
                     dirX = dirX*math.cos(-rotSpeed)-dirY*math.sin(-rotSpeed)
@@ -970,6 +990,7 @@ def main(posX,posY,worldMap,resolution):
                     oldPlaneX = float(planeX)
                     planeX = planeX*math.cos(-rotSpeed)-planeY*math.sin(-rotSpeed)
                     planeY = oldPlaneX * math.sin(-rotSpeed)+planeY*math.cos(-rotSpeed)
+                    rot+=(rotSpeed)
             
         #shooting closest zombie in firing line
         if reload and not gameover and unloaded_ammo>0 and ammocount < maxammo:
@@ -1037,7 +1058,19 @@ def main(posX,posY,worldMap,resolution):
 
         #keep steady framerate
         clock.tick(fps)  
-
+@njit()
+def new_frame(posx,posy,rot,frame,sky,floor,hres,halfvres,mod):
+    for i in range(hres):
+        rot_i = rot + np.deg2rad(i/mod-30)
+        sin,cos,cos2 = np.sin(rot_i),np.cos(rot_i),np.cos(np.deg2rad(i/mod-30))
+        frame[i][:] = sky[int(np.rad2deg(rot_i)%355)][:]/255
+        for j in range(halfvres):
+            n = (halfvres/(halfvres-j))/cos2
+            x,y = posx+cos*n,posy +sin*n
+            xx,yy = int(x*2%1*100),int(y*2%1*100)
+            shade = 0.2+0.6*(1-j/(halfvres))
+            frame[i][halfvres*2-j-1] = shade*floor[xx][yy]/255
+    return frame
 title(posX,posY,worldMap)
                 
             
